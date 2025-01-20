@@ -1,0 +1,27 @@
+{
+    "Author": "kcuY",
+    "Name": "CrystalSync",
+    "Punchline": "Chat via Discord.",
+    "Description": "Chat via Discord.",
+    "Tags": [
+        "Crystal Sync",
+        "CrystalSync",
+        "Chat",
+        "Discord"
+    ],
+    "InternalName": "CrystalSync",
+    "AssemblyVersion": "1.1.0.3",
+    "TestingAssemblyVersion": "0.0.0.1",
+    "RepoUrl": "https://github.com/lnjanos/crystalsync/",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 11,
+    "TestingDalamudApiLevel": 11,
+    "IsHide": "False",
+    "IsTestingExclusive": "False",
+    "DownloadCount": 7,
+    "LastUpdate": 1733780713,
+    "DownloadLinkInstall": "https://github.com/lnjanos/crystalsync/releases/download/Release/1.1.0.3.zip",
+    "DownloadLinkUpdate": "https://github.com/lnjanos/crystalsync/releases/download/Release/1.1.0.3.zip",
+    "DownloadLinkTesting": "https://github.com/lnjanos/crystalsync/releases/download/Release/testing.zip",
+    "IconUrl": "https://raw.githubusercontent.com/lnjanos/crystalsync/refs/heads/main/icon.png"
+}
