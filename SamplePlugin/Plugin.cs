@@ -34,6 +34,7 @@ using static Dalamud.Plugin.Services.IChatGui;
 using static Dalamud.Plugin.Services.IFramework;
 using static Dalamud.Plugin.Services.IGameInteropProvider;
 using static System.Diagnostics.Activity;
+using System.Numerics;
 
 public sealed class Plugin : IDalamudPlugin, IDisposable
 {
@@ -210,34 +211,78 @@ public sealed class Plugin : IDalamudPlugin, IDisposable
 
     public void OnChatMessage(XivChatType type, int a2, ref SeString sender, ref SeString message, ref bool isHandled)
     {
-        if (!Configuration.isRunning || !Configuration.SendPartys || !Configuration.SendTells || (((int)type != 13 || !Configuration.SendTells) && ((int)type != 14 || !Configuration.SendPartys)) || !Utils.DecodeSender(sender, type, out Dictionary<string, uint> player))
+        // Überprüfen, ob die Konfiguration aktiviert ist und ob Nachrichten des entsprechenden Typs gesendet werden sollen
+        if (!Configuration.isRunning ||
+            (!Configuration.SendPartys && !Configuration.SendTells) ||
+            !ShouldProcessMessage(type))
         {
             return;
         }
-        foreach (KeyValuePair<string, uint> kvp in player)
+
+        // Dekodieren des Senders und Überprüfen, ob es erfolgreich war
+        if (!Utils.DecodeSender(sender, type, out Dictionary<string, uint> players))
         {
-            string playername = kvp.Key + "@" + GetWorldName(kvp.Value);
-            if (localPlayerName == null)
+            return;
+        }
+
+        foreach (var player in players)
+        {
+            string playerName = $"{player.Key}@{GetWorldName(player.Value)}";
+
+            // Initialisieren des lokalen Spielernamens, falls noch nicht geschehen
+            if (string.IsNullOrEmpty(localPlayerName))
             {
-                localPlayerName = ((IGameObject)ClientState.LocalPlayer).Name.TextValue + "@" + GetWorldName(ClientState.LocalPlayer.HomeWorld.RowId);
+                localPlayerName = $"{ClientState.LocalPlayer.Name.TextValue}@{GetWorldName(ClientState.LocalPlayer.HomeWorld.RowId)}";
             }
-            if (playername == localPlayerName)
+
+            // Überspringen der eigenen Nachrichten
+            if (playerName.Equals(localPlayerName, StringComparison.OrdinalIgnoreCase))
             {
-                break;
+                continue;
             }
-            string msg = message.TextValue;
+
+            string messageContent = message.TextValue;
+
+            // Bestimmen des Nachrichtentyps und der entsprechenden Farbe
+            string senderType = type switch
+            {
+                XivChatType.TellIncoming => "tell",
+                _ => "party"
+            };
+
+            string colorHex = type switch
+            {
+                XivChatType.TellIncoming => Utils.Vector4ToHex(Configuration.tellColor),
+                _ => Utils.Vector4ToHex(Configuration.partyColor),
+            };
+
+            // Erstellen der SendMessageRequest
             SendMessageRequest sendMessage = new SendMessageRequest
             {
                 token = Configuration.Token,
-                sender_type = (((int)type == 13) ? "tell" : "party"),
-                sender_id = playername,
+                sender_type = senderType,
+                sender_id = playerName,
                 receiver_id = Configuration.DiscordId,
-                content = msg,
-                color = (((int)type == 13) ? Utils.Vector4ToHex(Configuration.tellColor) : Utils.Vector4ToHex(Configuration.partyColor))
+                content = messageContent,
+                color = colorHex
             };
+
+            // Asynchrones Weiterleiten der Nachricht an Discord
             ForwardMessageToDiscordAsync(sendMessage);
         }
     }
+
+    /// <summary>
+    /// Überprüft, ob die Nachricht basierend auf ihrem Typ verarbeitet werden soll.
+    /// </summary>
+    /// <param name="type">Der Typ der Chatnachricht.</param>
+    /// <returns>True, wenn die Nachricht verarbeitet werden soll; andernfalls False.</returns>
+    private bool ShouldProcessMessage(XivChatType type)
+    {
+        return (type == XivChatType.TellIncoming && Configuration.SendTells) ||
+               ((type == XivChatType.Party || type == XivChatType.CrossParty) && Configuration.SendPartys);
+    }
+
 
     public async Task ForwardMessageToDiscordAsync(SendMessageRequest message)
     {
