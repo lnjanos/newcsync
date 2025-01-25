@@ -35,6 +35,17 @@ using static Dalamud.Plugin.Services.IFramework;
 using static Dalamud.Plugin.Services.IGameInteropProvider;
 using static System.Diagnostics.Activity;
 using System.Numerics;
+using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using ClickLib;
+using ClickLib.Clicks;
+using ClickLib.Bases;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
+using ECommons.DalamudServices.Legacy;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Data.Parsing;
 
 public sealed class Plugin : IDalamudPlugin, IDisposable
 {
@@ -81,6 +92,8 @@ public sealed class Plugin : IDalamudPlugin, IDisposable
 
     [PluginService]
     internal static IDataManager DataManager { get; private set; }
+    [PluginService]
+    internal static ICondition Condition { get; private set; }
 
     public Configuration Configuration { get; init; }
 
@@ -129,8 +142,134 @@ public sealed class Plugin : IDalamudPlugin, IDisposable
         LoadWorlds();
         LoadEmotes();
 
+        Condition.ConditionChange += OnConditionChange;
+
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUI;
+    }
+
+    // -----------------------------------------------
+    // 1) Condition-Event
+    // -----------------------------------------------
+    public void OnConditionChange(ConditionFlag flag, bool value)
+    {
+        if (!Configuration.isRunning || !Configuration.SendDuty) return;
+
+        // Wenn eine Duty gefunden wird
+        if (flag == ConditionFlag.WaitingForDutyFinder && value)
+        {
+
+            var addonPtr = Svc.GameGui.GetAddonByName("ContentsFinderConfirm");
+            if (addonPtr == IntPtr.Zero)
+                return;
+
+            // Erstellen der SendMessageRequest
+            SendMessageRequest sendMessage = new SendMessageRequest
+            {
+                token = Configuration.Token,
+                sender_type = "queue",
+                sender_id = "Duty Finder",
+                receiver_id = Configuration.DiscordId,
+                content = "You have found a Duty.",
+                color = Utils.Vector4ToHex(Configuration.dutyColor)
+            };
+
+            // Asynchrones Weiterleiten der Nachricht an Discord
+            ForwardMessageToDiscordAsync(sendMessage);
+        }
+    }
+
+    // Einstieg, kein 'unsafe', kein 'async'
+    public void HandleDutyFinder(string action)
+    {
+        if ( Configuration.ConfirmValues.TryGetValue(action, out var act) )
+        {
+            ConfirmDutyAsync(0, act);
+        } else
+        {
+            ConfirmDutyAsync(0, Configuration.ConfirmValues["wait"]);
+        }
+        
+    }
+
+    // -----------------------------------------------
+    // 2) Die asynchrone Methode mit Retry
+    // -----------------------------------------------
+    public async void ConfirmDutyAsync(int tries, int buttonValue)
+    {
+        // Nach 3 Versuchen abbrechen
+        if (tries >= 3)
+        {
+            return;
+        }
+
+        // "Unsicheren" Teil in eine unsafe-Methode packen
+        bool success;
+
+        unsafe
+        {
+            success = TryWithdrawUnsafe(buttonValue);
+        }
+        await Task.Delay(2000);
+
+
+        return;
+    }
+
+    // -----------------------------------------------
+    // 3) Der "unsafe" Teil: FireCallback auf das Addon
+    // -----------------------------------------------
+    private unsafe bool TryWithdrawUnsafe(int buttonValue)
+    {
+        // 1) Addon holen
+        var addonPtr = Svc.GameGui.GetAddonByName("ContentsFinderConfirm");
+        if (addonPtr == IntPtr.Zero)
+            return false;
+
+        var addon = (AddonContentsFinderConfirm*)addonPtr;
+        // Prüfen, ob überhaupt da und sichtbar
+        if (!addon->IsVisible)
+            return false;
+
+        // Man will zwar "Withdraw", aber wir schauen zumindest,
+        // ob der Pointer existiert.
+        if (addon->WithdrawButton == null)
+            return false;
+
+        // 2) FireCallback mit 2 AtkValues
+        //    - param[0]: bestimmt, welcher Button (z.B. 2 oder 3 = "Withdraw")
+        //    - param[1]: i. d. R. 0
+        // Du kannst hier testweise 0..3 durchprobieren:
+
+        PressButtonWithCallback(addon, buttonValue);
+
+        return true;
+    }
+
+    // -----------------------------------------------
+    // 4) Eigentliche "FireCallback"-Helfermethode
+    // -----------------------------------------------
+    private static unsafe void PressButtonWithCallback(AddonContentsFinderConfirm* addon, int buttonValue)
+    {
+        // 2 AtkValue Felder, in der Regel INT-INT (ValueType=2 => Int)
+        //  - param[0] = ButtonId (0=Commence, 1=Wait, 2=Withdraw => je nach Patch)
+        //  - param[1] = meistens 0
+        const int paramCount = 2;
+        var values = stackalloc AtkValue[paramCount];
+
+        values[0] = new AtkValue
+        {
+            Type = ValueType.Int,
+            Int = buttonValue // 2 oder 3 => Withdraw, je nach Patch
+        };
+        values[1] = new AtkValue
+        {
+            Type = ValueType.Int,
+            Int = 0
+        };
+
+        // FireCallback => ruft intern das entsprechende UI-Event auf
+        addon->FireCallback((uint)paramCount, (FFXIVClientStructs.FFXIV.Component.GUI.AtkValue*)values, false);
     }
 
     public void LoadEmotes()

@@ -25,6 +25,9 @@ namespace CrystalSync.Windows
                 MinimumSize = new Vector2(400f, 200f),
                 MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
             };
+
+            TitleBarButtons.Add(Support.NavBarBtn);
+
             Plugin = plugin;
             WebSocketClient = new WebSocketClient(plugin);
         }

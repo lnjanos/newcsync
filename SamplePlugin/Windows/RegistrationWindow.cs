@@ -28,6 +28,9 @@ namespace CrystalSync.Windows
             : base("Registration###RegistrationWindow", (ImGuiWindowFlags)0, false)
         {
             ((Window)this).Flags = (ImGuiWindowFlags)34;
+
+            TitleBarButtons.Add(Support.NavBarBtn);
+
             Plugin = plugin;
             ((Window)this).Size = new Vector2(400f, 200f);
             ((Window)this).SizeCondition = (ImGuiCond)1;

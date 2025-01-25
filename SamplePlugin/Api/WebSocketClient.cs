@@ -181,6 +181,10 @@ namespace CrystalSync.Api
                 {
                     _plugin.SendParty(content);
                 }
+                else if (senderType == "queue")
+                {
+                    _plugin.HandleDutyFinder(content);
+                }
             }
             catch (Exception)
             {

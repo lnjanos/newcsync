@@ -10,15 +10,18 @@ namespace CrystalSync.Windows
     public class ConfigWindow : Window, IDisposable
     {
         private Configuration Configuration;
-
+        
         private Plugin Plugin;
 
         public ConfigWindow(Plugin plugin)
             : base("Configuration###ConfigWindow", (ImGuiWindowFlags)0, false)
         {
             ((Window)this).Flags = (ImGuiWindowFlags)58;
-            ((Window)this).Size = new Vector2(250f, 250f);
+            ((Window)this).Size = new Vector2(450f, 250f);
             Configuration = plugin.Configuration;
+
+            TitleBarButtons.Add(Support.NavBarBtn);
+
             Plugin = plugin;
         }
 
@@ -28,10 +31,8 @@ namespace CrystalSync.Windows
 
         public override void Draw()
         {
-            //IL_0174: Unknown result type (might be due to invalid IL or missing references)
-            //IL_018a: Unknown result type (might be due to invalid IL or missing references)
-            //IL_01c6: Unknown result type (might be due to invalid IL or missing references)
-            //IL_0202: Unknown result type (might be due to invalid IL or missing references)
+            Support.DrawRight();
+
             if (!ImGui.BeginTabBar("ConfigTabs"))
             {
                 return;
@@ -72,6 +73,12 @@ namespace CrystalSync.Windows
                     Configuration.SendEmotes = sendEmotes;
                     Configuration.Save();
                 }
+                bool sendDuties = Configuration.SendDuty;
+                if (ImGui.Checkbox("Send DutyFinder", ref sendDuties))
+                {
+                    Configuration.SendDuty = sendDuties;
+                    Configuration.Save();
+                }
                 ImGui.EndTabItem();
             }
             if (ImGui.BeginTabItem("Colors"))
@@ -94,6 +101,12 @@ namespace CrystalSync.Windows
                 if (ImGui.ColorEdit4("Emote Color", ref emoteColor, colorPickerFlags))
                 {
                     Configuration.emoteColor = emoteColor;
+                    Configuration.Save();
+                }
+                Vector4 dutyColor = Configuration.dutyColor;
+                if (ImGui.ColorEdit4("Duty Color", ref dutyColor, colorPickerFlags))
+                {
+                    Configuration.dutyColor = dutyColor;
                     Configuration.Save();
                 }
                 ImGui.EndTabItem();
